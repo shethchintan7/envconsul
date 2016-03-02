@@ -16,6 +16,7 @@ import (
 	"reflect"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -239,9 +240,8 @@ func (r *Runner) Run() (<-chan int, error) {
 			log.Printf("[INFO] (runner) missing data for %s", d.Display())
 			return nil, nil
 		}
-
 		switch typed := d.(type) {
-		case *dep.StoreKeyPrefix:
+		case *dep.HealthServices:
 			r.appendPrefixes(env, typed, data)
 		case *dep.VaultSecret:
 			r.appendSecrets(env, typed, data)
@@ -343,22 +343,22 @@ func applyTemplate(contents, key string) (string, error) {
 }
 
 func (r *Runner) appendPrefixes(
-	env map[string]string, d *dep.StoreKeyPrefix, data interface{}) error {
+	env map[string]string, d *dep.HealthServices, data interface{}) error {
 	var err error
-
-	typed, ok := data.([]*dep.KeyPair)
+	//log.Printf("here")
+	//log.Printf(d.Display())
+	typed, ok := data.([]*dep.HealthService)
 	if !ok {
 		return fmt.Errorf("error converting to keypair %s", d.Display())
 	}
-
 	// Get the ConfigPrefix so we can get configuration from it.
 	cp := r.configPrefixMap[d.HashCode()]
 
 	// For each pair, update the environment hash. Subsequent runs could
 	// overwrite an existing key.
 	for _, pair := range typed {
-		key, value := pair.Key, string(pair.Value)
-
+		//log.Printf(pair.Address, pair.Port)
+		key, value := pair.ID, pair.Address+":"+strconv.FormatUint(pair.Port, 10)
 		// It is not possible to have an environment variable that is blank, but
 		// it is possible to have an environment variable _value_ that is blank.
 		if strings.TrimSpace(key) == "" {
@@ -504,7 +504,9 @@ func (r *Runner) init() error {
 
 	// Parse and add consul dependencies
 	for _, p := range r.config.Prefixes {
-		d, err := dep.ParseStoreKeyPrefix(p.Path)
+		d, err := dep.ParseHealthServices(p.Path)
+		//log.Printf("lala")
+		//log.Printf(d.Display())
 		if err != nil {
 			return err
 		}
